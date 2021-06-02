@@ -126,6 +126,8 @@ def convert_table_6(pdf_budget_file):
             segments = list(map(fix_align, segments))
             segments = list(map(replace_dash, segments))
 
+            print(segments)
+
             # Condition find for section 6.2
             if any(line.startswith(x) for x in section_6_2_prefix):
                 is_section_6 = True
@@ -137,11 +139,11 @@ def convert_table_6(pdf_budget_file):
                 continue
 
             if is_section_6 and is_row:
-                no_number_title = re.sub(r'\d\.', '', segments[0]).strip()
+                no_number_title = re.sub(r'\d+\.', '', segments[0]).strip()
                 if no_number_title.startswith(project_title_prefix) \
                         or segments[0].find('7. รายละเอียดงบประมาณจ') >= 0:
                     if project_name != '' and sum_budget is not None and sum_budget != 'รวม':
-                        is_plan = re.search(r'\d\.', project_name) is not None
+                        is_plan = re.search(r'\d+\.', project_name) is not None
                         cross_func = project_name.find('แผนงานบูรณาการ') > 0
                         item_num += 1
                         ref_doc = f'{book_year}.{issue_num}.{book_num}.{sub_book_num}'
@@ -204,3 +206,5 @@ if __name__ == '__main__':
     for file in list_of_files:
         if file.endswith('.pdf'):
             convert_table_6(file)
+
+    # convert_table_6('budget-pdf/10.pdf')
