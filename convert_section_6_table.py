@@ -38,6 +38,21 @@ def fix_align(txt):
     return ''.join(result)
 
 
+def thai_number_to_arabic(thai_number):
+    thai_number = thai_number.replace('๐', '0')
+    thai_number = thai_number.replace('๑', '1')
+    thai_number = thai_number.replace('๒', '2')
+    thai_number = thai_number.replace('๓', '3')
+    thai_number = thai_number.replace('๔', '4')
+    thai_number = thai_number.replace('๕', '5')
+    thai_number = thai_number.replace('๖', '6')
+    thai_number = thai_number.replace('๗', '7')
+    thai_number = thai_number.replace('๘', '8')
+    thai_number = thai_number.replace('๙', '9')
+    thai_number = thai_number.replace(',', '')
+    return thai_number
+
+
 def replace_dash(text):
     if text == '-':
         return '0'
@@ -51,6 +66,12 @@ def convert_table_6(pdf_budget_file):
     text_file_name = pdf_budget_file.replace('.pdf', '.txt')
     project_budgets = []
     with open(text_file_name) as text_file:
+        book_year = 0
+        issue_num = 0
+        book_num = 0
+        sub_book_num = 0
+        item_num = 0
+        page = 0
         count = 0
         lines = text_file.readlines()
         is_section_6 = False
@@ -70,8 +91,33 @@ def convert_table_6(pdf_budget_file):
                 org_name = line.strip()
                 sub_org_name = lines[count].strip()
 
+            if line.find('เอกสารงบประมาณ ฉ') > 0:
+                line = thai_number_to_arabic(line)
+                numbers = re.findall('[0-9]+', line)
+                if len(numbers) > 0:
+                    issue_num = numbers[0]
+
+            if line.startswith('ประจ') and line.find('งบประมาณ พ.ศ.') > 0:
+                line = thai_number_to_arabic(line)
+                numbers = re.findall('[0-9]+', line)
+                if len(numbers) > 0:
+                    book_year = int(numbers[0]) - 543
+
+            if line.find('เล่มท') > 0:
+                line = thai_number_to_arabic(line)
+                numbers = re.findall('[0-9]+', line)
+                if len(numbers) == 2:
+                    book_num = numbers[1]
+                    sub_book_num = numbers[0]
+
             # ignore page number.
             if line.startswith(''):
+                try:
+                    num = int(line.strip())
+                    if num > page:
+                        page = num
+                except ValueError:
+                    pass
                 continue
 
             segments = line.split('  ')
@@ -91,16 +137,23 @@ def convert_table_6(pdf_budget_file):
                 continue
 
             if is_section_6 and is_row:
-                # print(segments)
                 no_number_title = re.sub(r'\d\.', '', segments[0]).strip()
                 if no_number_title.startswith(project_title_prefix) \
                         or segments[0].find('7. รายละเอียดงบประมาณจ') >= 0:
                     if project_name != '' and sum_budget is not None and sum_budget != 'รวม':
                         is_plan = re.search(r'\d\.', project_name) is not None
+                        cross_func = project_name.find('แผนงานบูรณาการ') > 0
+                        item_num += 1
+                        ref_doc = f'{book_year}.{issue_num}.{book_num}.{sub_book_num}'
+                        item_id = f'{ref_doc}.{item_num}'
                         plan = {
-                            'org_name': org_name,
-                            'sub_org_name': sub_org_name,
-                            'project_name': project_name,
+                            'ITEM_ID': item_id,
+                            'REF_DOC': ref_doc,
+                            'REF_PAGE_NO': page,
+                            'MINISTRY': org_name,
+                            'BUDGETARY_UNIT': sub_org_name,
+                            'CROSS_FUNC': cross_func,
+                            'PROJECT': project_name,
                             'is_plan': is_plan,
                             'personnel_budget': personnel_budget,
                             'operational_budget': operational_budget,
@@ -140,6 +193,7 @@ def convert_table_6(pdf_budget_file):
         csv_file_name = 'budget-csv/' + pdf_budget_file.split('/')[1].replace('.pdf', '.csv')
         f = open(csv_file_name, 'w')
         w = csv.DictWriter(f, project_budgets[0].keys())
+        w.writeheader()
         w.writerows(project_budgets)
         f.close()
 
